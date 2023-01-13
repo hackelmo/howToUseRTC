@@ -14,13 +14,21 @@ html(lang="en")
                 form(action="")
                     input(placeholder='room name ', required, type='Text')
                     button join room
+                h4 Open Rooms :
+                    ul
             div#call
                 div#mySteram
                     video#myFace(autoplay,playsinline,width='400',height='400')
-                    button#mute Mute 
+                    button#mute Unmute 
                     button#camera CameraOff
                     select#cameras
-                video#peersStream(autoplay,playsinline,width='700',height='700')
+                video#peersStream(autoplay,playsinline,width='300',height='300')
+                h3 Room  
+                div#myChat
+                    input(placeholder='chat', required,type='text')
+                    button submit
+                div#room
+                    ul
 
             script(src='/socket.io/socket.io.js')
             script(src="/public/js/app.js") 

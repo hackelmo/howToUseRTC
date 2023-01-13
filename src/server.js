@@ -9,6 +9,7 @@
 import http from "http";
 import { Server } from "socket.io";
 import express from "express"; //express(프로토콜) = http를 다룬다.
+import { instrumnet } from "@socket.io/admin-ui";
 
 //express 방식시작.
 const app = express();
@@ -24,10 +25,31 @@ app.get("/*", (_, res) => res.redirect("/"));
 const httpServer = http.createServer(app); //server 생성 http(server)
 const wsServer = new Server(httpServer); //Websocket(server) 생성
 
+function publicRooms() {
+  const {
+    sockets: {
+      adapter: { sids, rooms },
+    },
+  } = wsServer;
+  const publicRooms = [];
+  rooms.forEach((_, key) => {
+    if (sids.get(key) === undefined) {
+      publicRooms.push(key);
+    }
+  });
+  return publicRooms;
+}
+
+function findRoomsNumber(roomName) {
+  return wsServer.sockets.adapter.rooms.get(roomName)?.size;
+}
+
 wsServer.on("connection", (socket) => {
   socket.on("join_room", (roomName) => {
     socket.join(roomName);
-    socket.to(roomName).emit("welcome");
+    // console.log(socket.rooms);
+    socket.to(roomName).emit("welcome", socket.id, findRoomsNumber(roomName));
+    wsServer.sockets.emit("room_change", publicRooms());
   });
   socket.on("offer", (offer, roomName) => {
     socket.to(roomName).emit("offer", offer);
@@ -38,46 +60,22 @@ wsServer.on("connection", (socket) => {
   socket.on("ice", (ice, roomName) => {
     socket.to(roomName).emit("ice", ice);
   });
+  socket.on("disconnecting", () => {
+    socket.rooms.forEach((room) =>
+      socket.to(room).emit("bye", socket.id, findRoomsNumber(room))
+    );
+  });
+  socket.on("disconnect", (data) => {
+    wsServer.sockets.emit("room_change", publicRooms());
+  });
+  socket.on("new_message", (msg, room, done) => {
+    console.log(msg, room);
+    done();
+    console.log([...socket.rooms]);
+    socket.to(room).emit("new_message", msg);
+  });
 });
 
-// function handleCennection(socket) {
-//   //소켓은 서버와 브라우 저 사이의 연결을 말한다.
-//   console.log(socket);
-// }
-
-// const sockets = []; //누군가 우리 서버에 접근하면 connetion을 넣어준다.
-
-// wss.on("connection", (socket) => {
-//   sockets.push(socket); //크롬이 연결되면 sockets에 크롬을 넣어준다.
-//   socket["nickname"] = "Anon"; //nickname 이 없으면 Anon
-//   console.log("Connection Browser ");
-//   socket.on("close", () => console.log("브라우저와 연결이 끊겼습니다.")); //브라우저가 꺼졌을때에 대한  linstner를 등록
-//   // socket.on("message", (message) => console.log(message.toString("utf8"))); //브라우저가 서버에 메세지를 보냈을때에 대한 linstner를 등록
-//   socket.on("message", (msg) => {
-//     // socket.send(message.toString("utf-8"));
-//     const message = JSON.parse(msg.toString("utf-8")); //브라우저에서온 데이터(string)을 javascript Object로 변환해준다.
-//     // console.log(parsed, message.toString("utf-8"));
-//     // if (parsed.type === "new_Message") {
-//     //   sockets.forEach((asocket) => asocket.send(parsed.payload));
-//     // } else if (parsed.type === "nickname") {
-//     //   console.log(parsed.payload);
-//     // }
-//     switch (message.type) {
-//       case "new_Message":
-//         // sockets.forEach((asocket) => asocket.send(message.payload));
-//         sockets.forEach((asocket) =>
-//           asocket.send(`${socket.nickname}:${message.payload}`)
-//         );
-//         break;
-//       case "nickname":
-//         // console.log(message.payload);
-//         socket["nickname"] = message.payload; //nickname 을 받으면 socket에 넣어준다.
-//         break;
-//     }
-//   }); //브라우저가 서버에 메세지를 보냈을때에 대한 linstner를 등록
-//   // socket.send("hel lo"); //소켓에 있는 send라는 메서드로 브라우저에게 hello 라는 메세지를 보냄
-// }); //connection 이 생기면 즉시 message를 보낸다.
-//on 메소드는 백엔드에 연결된 사람의 정보를 제공해주는데
 httpServer.listen(3001, () => {
   console.log(`listening haha`);
 }); //http , websocket 같은 3000번포트 공유

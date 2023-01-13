@@ -7,6 +7,8 @@ const camerasSelect = document.getElementById("cameras");
 
 const welcome = document.getElementById("welcome");
 const call = document.getElementById("call");
+const room = document.getElementById("room");
+const myChat = document.getElementById("myChat");
 
 let myStream;
 let myPeerConnection;
@@ -14,6 +16,46 @@ let muted = true;
 let roomName;
 let cameraOff = false;
 call.hidden = true;
+
+socket.on("room_change", (rooms) => {
+  const roomList = welcome.querySelector("ul");
+  roomList.innerHTML = "";
+  if (rooms.length === 0) {
+    return;
+  }
+  rooms.forEach((room) => {
+    const li = document.createElement("li");
+    li.innerText = room;
+    roomList.append(li);
+  });
+});
+
+function addMessage(msg) {
+  const ul = room.querySelector("ul");
+  const li = document.createElement("li");
+  li.innerText = msg;
+  ul.appendChild(li);
+}
+
+myChat.querySelector("button").addEventListener("click", () => {
+  const input = myChat.querySelector("input");
+  const value = input.value;
+
+  socket.emit("new_message", value, roomName, () => {
+    //내가받는거
+    addMessage(`You: ${value}`);
+  });
+  //벨류없애면 없는값이간다
+  input.value = "";
+});
+
+//남들이받는거
+socket.on("new_message", (msg) => {
+  console.log("들어옴");
+  addMessage(msg);
+});
+
+///////
 
 async function getCameras() {
   try {
@@ -50,10 +92,10 @@ muteBtn.addEventListener("click", () => {
   });
 
   if (muted) {
-    muteBtn.innerText = "Mute";
+    muteBtn.innerText = "Unmute";
     muted = false;
   } else {
-    muteBtn.innerText = "Unmute";
+    muteBtn.innerText = "Mute";
     muted = true;
   }
 });
@@ -85,8 +127,11 @@ welcomeForm.addEventListener("submit", async (e) => {
   const input = welcomeForm.querySelector("input");
   await startGame();
   socket.emit("join_room", input.value);
+
   roomName = input.value;
   input.value = "";
+  const h3 = call.querySelector("h3");
+  h3.innerText = `Room ${roomName}`;
 });
 
 ////// 이걸로  호영=> 태현 바꾸기
@@ -98,15 +143,26 @@ async function startGame() {
 }
 
 //브레이브
-socket.on("welcome", async () => {
+socket.on("welcome", async (data, roomNum) => {
+  const h3 = call.querySelector("h3");
+  h3.innerText = `Room ${roomName} (${roomNum})`;
+  addMessage(`${data} : 입장`);
   const offer = await myPeerConnection.createOffer();
   myPeerConnection.setLocalDescription(offer);
   console.log("sent the offer");
   socket.emit("offer", offer, roomName);
 });
 
+socket.on("room_change", console.log);
+
 socket.on("answer", (answer) => {
   myPeerConnection.setRemoteDescription(answer);
+});
+
+socket.on("bye", (data, roomNum) => {
+  const h3 = call.querySelector("h3");
+  h3.innerText = `Room : ${roomNum}`;
+  addMessage(`${data} : 퇴장`);
 });
 
 //파폭
@@ -126,8 +182,6 @@ function makeConnection() {
     socket.emit("ice", e.candidate, roomName);
   });
   myPeerConnection.addEventListener("addstream", (data) => {
-    // console.log("peer스트림", data.stream);
-    // console.log("myStreamsdfm", myStream);
     const peersStream = document.getElementById("peersStream");
     peersStream.srcObject = data.stream;
   });
